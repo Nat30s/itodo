@@ -1,0 +1,33 @@
+/* Custom styles can be added here if needed */
+
+#add-task-modal {
+    z-index: 1000; /* Ensure modal stays on top */
+}
+
+.task-card {
+    z-index: auto !important; /* Reset task card stacking */
+    user-select: none; /* Prevent text selection during drag */
+    -webkit-user-select: none;
+}
+
+/* For the floating action buttons */
+.fixed.bottom-4.right-4 {
+    z-index: 100; /* Keep buttons above tasks but below modal */
+}
+
+/* Existing styles below - keep these as they are */
+.dragging {
+    opacity: 0.8;
+    transform: rotate(3deg);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    transition: all 0.2s ease;
+    border: 2px dashed #3b82f6 !important;
+}
+
+.drag-over-column {
+    background: #f8fafc;
+    border-color: #3b82f6;
+    transform: scale(1.02);
+}
+
+/* ... rest of your existing styles ... */
