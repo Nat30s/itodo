@@ -4,6 +4,7 @@
     let saveTimeout = null;
     let boardCounter = 0;
     let dragCounter = 0;
+    let globalColumns = ['backlog', 'todo', 'in-review'];
 
     // Initialize boards
     window.addEventListener('load', () => {
@@ -25,86 +26,78 @@
     function createBoard(boardId) {
         const board = document.createElement('div');
         board.className = 'flex space-x-4 kanban-board';
-        board.innerHTML = `
-            <section class="bg-white rounded-lg shadow-lg p-4 w-80 border-2 border-transparent transition-all"
-                     id="${boardId}-backlog"
-                     ondrop="drop(event)"
-                     ondragover="allowDrop(event)"
-                     ondragenter="highlightColumn(event)"
-                     ondragleave="unhighlightColumn(event)">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-gray-600 font-semibold editable-column"
-                        data-column="${boardId}-backlog"
-                        contenteditable="true">BACKLOG</h2>
-                    <button aria-label="Add task" class="text-gray-500 hover:text-gray-700"
-                            onclick="openTaskPopup('${boardId}-backlog')">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>
-                <div class="space-y-4 drop-zone relative" id="${boardId}-backlog-tasks"></div>
-            </section>
+        board.id = boardId;
 
-            <section class="bg-white rounded-lg shadow-lg p-4 w-80 border-2 border-transparent transition-all"
-                     id="${boardId}-todo"
-                     ondrop="drop(event)"
-                     ondragover="allowDrop(event)"
-                     ondragenter="highlightColumn(event)"
-                     ondragleave="unhighlightColumn(event)">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-gray-600 font-semibold editable-column"
-                        data-column="${boardId}-todo"
-                        contenteditable="true">TO DO</h2>
-                    <button aria-label="Add task" class="text-gray-500 hover:text-gray-700"
-                            onclick="openTaskPopup('${boardId}-todo')">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>
-                <div class="space-y-4 drop-zone relative" id="${boardId}-todo-tasks"></div>
-            </section>
-
-            <section class="bg-white rounded-lg shadow-lg p-4 w-80 border-2 border-transparent transition-all"
-                     id="${boardId}-in-review"
-                     ondrop="drop(event)"
-                     ondragover="allowDrop(event)"
-                     ondragenter="highlightColumn(event)"
-                     ondragleave="unhighlightColumn(event)">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-gray-600 font-semibold editable-column"
-                        data-column="${boardId}-in-review"
-                        contenteditable="true">IN REVIEW</h2>
-                    <button aria-label="Add task" class="text-gray-500 hover:text-gray-700"
-                            onclick="openTaskPopup('${boardId}-in-review')">
-                        <i class="fas fa-plus"></i>
-                    </button>
-                </div>
-                <div class="space-y-4 drop-zone relative" id="${boardId}-in-review-tasks"></div>
-            </section>
-        `;
-
-        // Add column name editing
-        const columns = board.querySelectorAll('.editable-column');
-        columns.forEach(column => {
-            column.addEventListener('blur', () => {
-                saveTasks();
-            });
-            column.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    column.blur();
-                }
-            });
+        globalColumns.forEach(colId => {
+            board.appendChild(createColumnElement(colId));
         });
 
         document.getElementById('boards-container').appendChild(board);
     }
 
+    // Column management
+    window.createColumnForAllBoards = function() {
+        const newColumnId = `col-${Date.now()}`;
+        globalColumns.push(newColumnId);
+
+        document.querySelectorAll('.kanban-board').forEach(board => {
+            board.appendChild(createColumnElement(newColumnId));
+        });
+
+        saveTasks();
+    };
+
+    function createColumnElement(columnId) {
+        const section = document.createElement('section');
+        section.className = 'bg-white rounded-lg shadow-lg p-4 w-80 border-2 border-transparent transition-all';
+        section.id = columnId;
+        section.ondrop = drop;
+        section.ondragover = allowDrop;
+        section.ondragenter = highlightColumn;
+        section.ondragleave = unhighlightColumn;
+
+        section.innerHTML = `
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-gray-600 font-semibold editable-column"
+                    data-column="${columnId}"
+                    contenteditable="true">${columnId.toUpperCase().replace('-', ' ')}</h2>
+                <div class="flex gap-2">
+                    <button class="text-gray-500 hover:text-gray-700 delete-column-btn">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <button class="text-gray-500 hover:text-gray-700"
+                            onclick="openTaskPopup('${columnId}')">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="space-y-4 drop-zone relative" id="${columnId}-tasks"></div>
+        `;
+
+        return section;
+    }
+
+    // Column deletion
+    document.addEventListener('click', (e) => {
+        if(e.target.closest('.delete-column-btn')) {
+            const column = e.target.closest('section');
+            const columnId = column.id;
+
+            if(confirm('Delete this column from all boards?')) {
+                globalColumns = globalColumns.filter(id => id !== columnId);
+                document.querySelectorAll(`#${columnId}`).forEach(col => col.remove());
+                saveTasks();
+            }
+        }
+    });
+
     // Task management
     function escapeHtml(unsafe) {
         return unsafe.replace(/&/g, "&amp;")
-                     .replace(/</g, "&lt;")
-                     .replace(/>/g, "&gt;")
-                     .replace(/"/g, "&quot;")
-                     .replace(/'/g, "&#039;");
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
     }
 
     window.openTaskPopup = function(columnId) {
@@ -308,20 +301,24 @@
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
             const data = {
-                boards: boardCounter,
+                globalColumns: globalColumns,
+                boards: [],
                 tasks: [],
                 columns: {}
             };
 
             document.querySelectorAll('.kanban-board').forEach(board => {
-                board.querySelectorAll('section').forEach(section => {
-                    const columnId = section.id;
-                    const columnName = section.querySelector('.editable-column').textContent;
+                const boardData = {
+                    id: board.id,
+                    columns: []
+                };
 
-                    // Save column name
-                    data.columns[columnId] = columnName;
+                globalColumns.forEach(columnId => {
+                    const section = board.querySelector(`#${columnId}`);
+                    if (!section) return;
 
-                    // Save tasks
+                    data.columns[columnId] = section.querySelector('.editable-column').textContent;
+
                     section.querySelectorAll('.bg-white').forEach(taskElement => {
                         data.tasks.push({
                             id: taskElement.dataset.taskId,
@@ -331,6 +328,8 @@
                         });
                     });
                 });
+
+                data.boards.push(boardData);
             });
 
             try {
@@ -343,76 +342,108 @@
 
     function loadTasks() {
         try {
-            const data = JSON.parse(localStorage.getItem('kanbanData')) || { boards: 0, tasks: [], columns: {} };
-            boardCounter = data.boards || 0;
+            const data = JSON.parse(localStorage.getItem('kanbanData')) || {
+                globalColumns: ['backlog', 'todo', 'in-review'],
+                boards: [],
+                tasks: [],
+                columns: {}
+            };
 
-            // Create boards
-            for (let i = 0; i < boardCounter; i++) {
-                createBoard(`board-${i}`);
-            }
+            globalColumns = data.globalColumns;
+            boardCounter = data.boards.length;
 
-            // Restore column names
-            Object.entries(data.columns).forEach(([columnId, columnName]) => {
-                const columnHeader = document.querySelector(`[data-column="${columnId}"]`);
-                if (columnHeader) {
-                    columnHeader.textContent = columnName;
-                }
+            data.boards.forEach(boardData => {
+                const board = document.createElement('div');
+                board.className = 'flex space-x-4 kanban-board';
+                board.id = boardData.id;
+
+                globalColumns.forEach(columnId => {
+                    const section = createColumnElement(columnId);
+                    const header = section.querySelector('.editable-column');
+                    if (data.columns[columnId]) {
+                        header.textContent = data.columns[columnId];
+                    }
+                    board.appendChild(section);
+                });
+
+                document.getElementById('boards-container').appendChild(board);
             });
 
-            // Load tasks
             data.tasks.forEach(task => {
                 const column = document.getElementById(`${task.columnId}-tasks`);
                 if (column) {
-                    addTaskToColumn(task);
+                    const taskElement = document.createElement('div');
+                    taskElement.className = 'task-card bg-white border border-gray-200 rounded-lg p-4 shadow-sm mb-4 transition-transform';
+                    taskElement.setAttribute('draggable', true);
+                    taskElement.dataset.taskId = task.id;
+                    taskElement.innerHTML = `
+                        <h3 class="text-gray-800 font-semibold mb-2">${task.title}</h3>
+                        <p class="text-gray-600">${task.description}</p>
+                        <div class="flex justify-end space-x-3 mt-2">
+                            <button class="text-gray-400 hover:text-gray-600 edit-btn transition-colors" title="Edit">
+                                <i class="fas fa-pencil-alt text-sm"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-gray-600 duplicate-btn transition-colors" title="Duplicate">
+                                <i class="fas fa-clone text-sm"></i>
+                            </button>
+                            <button class="text-gray-400 hover:text-gray-600 delete-btn transition-colors" title="Delete">
+                                <i class="fas fa-trash-alt text-sm"></i>
+                            </button>
+                        </div>
+                    `;
+                    column.appendChild(taskElement);
                 }
             });
+
         } catch (e) {
             console.error('Failed to load tasks:', e);
         }
     }
 
-    // Export
+    // Import/Export functionality
     document.getElementById('exportBtn').addEventListener('click', () => {
-        if(confirm('Save all data as backup file?')) {
-            const data = JSON.parse(localStorage.getItem('kanbanData')) || { boards: 0, tasks: [], columns: {} };
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
+        const data = JSON.parse(localStorage.getItem('kanbanData')) || {
+            globalColumns: [],
+            boards: [],
+            tasks: [],
+            columns: {}
+        };
 
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `kanban-backup-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `kanban-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     });
 
-    // Import
     document.getElementById('importBtn').addEventListener('click', () => {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
 
         input.onchange = e => {
-            if(confirm('This will overwrite current data. Continue?')) {
-                const file = e.target.files[0];
-                const reader = new FileReader();
+            const file = e.target.files[0];
+            if (!file) return;
 
-                reader.onload = event => {
-                    try {
-                        const data = JSON.parse(event.target.result);
-                        localStorage.setItem('kanbanData', JSON.stringify(data));
-                        location.reload();
-                    } catch (error) {
-                        alert('Invalid file format. Please use exported backup files.');
-                    }
-                };
-
-                reader.readAsText(file);
-            }
+            const reader = new FileReader();
+            reader.onload = event => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    localStorage.setItem('kanbanData', JSON.stringify(data));
+                    location.reload();
+                } catch (error) {
+                    alert('Invalid backup file format');
+                }
+            };
+            reader.readAsText(file);
         };
 
         input.click();
     });
+
 })();
